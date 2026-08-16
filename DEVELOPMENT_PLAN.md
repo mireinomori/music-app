@@ -25,6 +25,7 @@
 - MusicXML生成とブラウザプレビュー：確認済み
 - MuseScore PDF出力：MuseScoreのmacOS GUIセッションで最終確認待ち
 - README、依存関係、起動用Makefile：整備済み
+- GitHub `main` / `agent/initial-mvp` ブランチ：登録済み
 
 ### 次に行う作業
 
