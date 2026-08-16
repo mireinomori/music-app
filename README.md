@@ -66,6 +66,12 @@ npm run dev --prefix frontend -- --host 127.0.0.1
 
 ブラウザで http://127.0.0.1:5173/ を開いてください。
 
+macOSでGoogle Chromeを開く場合は、別のターミナルで次を実行できます。
+
+```bash
+make open-chrome
+```
+
 ## 使い方
 
 1. MP3などをドラッグ＆ドロップする
