@@ -77,7 +77,7 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
         try:
             # Converter mode avoids opening the editor window during local runs.
             subprocess.run(
-                [muse, "-s", "-m", "-w", "-R", str(xml_path), "-o", str(pdf_path)],
+                [muse, "-o", str(pdf_path), str(xml_path)],
                 check=True,
                 timeout=20,
                 capture_output=True,
@@ -87,8 +87,8 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
                 result.pdf_path = pdf_path
             else:
                 raise RuntimeError("MuseScoreがPDFファイルを生成しませんでした")
-        except Exception as exc:  # noqa: BLE001 - MuseScore is an optional external tool
-            result.warning = f"PDF変換に失敗しました。MusicXMLは保存できます。({exc})"
+        except Exception:  # noqa: BLE001 - MuseScore is an optional external tool
+            result.warning = "PDF変換に失敗しました。MusicXMLは保存できます。MuseScore Studioを直接開いて書き出すこともできます。"
     else:
         result.warning = "PDF出力にはMuseScore Studioのインストールが必要です。"
     return result
