@@ -1,0 +1,1 @@
+{"name":"otofude-frontend","private":true,"version":"0.1.0","type":"module","scripts":{"dev":"vite","build":"tsc -b && vite build"},"dependencies":{"@vitejs/plugin-react":"latest","opensheetmusicdisplay":"^1.9.9","react":"latest","react-dom":"latest"},"devDependencies":{"typescript":"latest","vite":"latest","@types/react":"latest","@types/react-dom":"latest"}}
