@@ -33,6 +33,12 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
     output_dir.mkdir(parents=True, exist_ok=True)
     result = AnalysisResult()
     try:
+        # macOSの権限制限されたsite-packagesではNumbaのキャッシュ先を作れないことがある。
+        # Basic Pitch/librosaの解析自体には不要なので、ローカル実行時はキャッシュを無効化する。
+        runtime_tmp = output_dir / ".runtime-tmp"
+        runtime_tmp.mkdir(exist_ok=True)
+        (runtime_tmp / "numba-cache").mkdir(exist_ok=True)
+        os.environ["NUMBA_CACHE_DIR"] = str(runtime_tmp / "numba-cache")
         import librosa
 
         y, sr = librosa.load(path, sr=None, mono=True, duration=900)
