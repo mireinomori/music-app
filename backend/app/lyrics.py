@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import unicodedata
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -21,15 +22,24 @@ def transcribe_and_attach(audio_path: Path, musicxml_path: Path) -> dict[str, ob
     segments, info = model.transcribe(
         str(audio_path), language="ja", beam_size=5, word_timestamps=True, vad_filter=True
     )
-    words: list[str] = []
+    segments_text: list[str] = []
     for segment in segments:
-        if segment.words:
-            words.extend(word.word.strip() for word in segment.words if word.word.strip())
-        elif segment.text.strip():
-            words.extend(segment.text.strip().split())
-    words = [word for word in words if word]
+        if segment.text.strip():
+            segments_text.append(segment.text.strip())
+    if str(info.language).lower().startswith("ja"):
+        # Japanese transcription has no spaces.  Treat readable kana/kanji
+        # units as lyric syllables instead of reporting Whisper segments as
+        # a misleading word count (e.g. 23 long segments).
+        words = [char for text in segments_text for char in text if _is_lyric_char(char)]
+    else:
+        words = [word for text in segments_text for word in text.split() if word]
     _attach_lyrics(musicxml_path, words)
     return {"text": "".join(words), "language": info.language, "word_count": len(words)}
+
+
+def _is_lyric_char(char: str) -> bool:
+    category = unicodedata.category(char)
+    return category[0] in {"L", "N"} or char in "ーっゃゅょぁぃぅぇぉ"
 
 
 def _attach_lyrics(path: Path, words: list[str]) -> None:
