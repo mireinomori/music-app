@@ -78,7 +78,9 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
     _quantize_midi(midi_path, result.bpm, quantize)
     midi_to_musicxml(midi_path, xml_path)
     result.midi_path, result.xml_path = midi_path, xml_path
-    muse = _find_musescore()
+    # MuseScore can crash on very dense long scores on macOS.  Keep the core
+    # transcription stable and require explicit opt-in for automatic PDF export.
+    muse = _find_musescore() if os.getenv("OTOFUDE_ENABLE_MUSESCORE_PDF") == "1" else None
     if muse:
         pdf_path = output_dir / "score.pdf"
         try:
@@ -97,7 +99,7 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
         except Exception:  # noqa: BLE001 - MuseScore is an optional external tool
             result.warning = "PDF変換に失敗しました。MusicXMLは保存できます。MuseScore Studioを直接開いて書き出すこともできます。"
     else:
-        result.warning = "PDF出力にはMuseScore Studioのインストールが必要です。"
+        result.warning = "PDFはMusicXML生成後にMuseScore Studioで書き出せます。自動PDF変換は安全のため無効にしています。"
     return result
 
 
