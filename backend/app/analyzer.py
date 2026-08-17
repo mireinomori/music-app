@@ -28,11 +28,17 @@ def validate_audio(path: Path, max_bytes: int = 250 * 1024 * 1024) -> None:
         raise ValueError("音声ファイルが大きすぎます。MVPでは250MB以下にしてください。")
 
 
-def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> AnalysisResult:
+def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto", mode: str = "auto") -> AnalysisResult:
     validate_audio(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     result = AnalysisResult()
     try:
+        # macOSの権限制限されたsite-packagesではNumbaのキャッシュ先を作れないことがある。
+        # Basic Pitch/librosaの解析自体には不要なので、ローカル実行時はキャッシュを無効化する。
+        runtime_tmp = output_dir / ".runtime-tmp"
+        runtime_tmp.mkdir(exist_ok=True)
+        (runtime_tmp / "numba-cache").mkdir(exist_ok=True)
+        os.environ["NUMBA_CACHE_DIR"] = str(runtime_tmp / "numba-cache")
         import librosa
 
         y, sr = librosa.load(path, sr=None, mono=True, duration=900)
@@ -62,22 +68,25 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
             candidates[0].replace(midi_path)
         else:
             raise RuntimeError("MIDIが生成されませんでした")
-    except Exception:  # noqa: BLE001 - Basic Pitch is an optional runtime
-        result.warning = "Basic Pitchが利用できないため、デモ用のMIDI/楽譜を表示しています。" if not result.warning else result.warning
-        _write_demo_midi(midi_path)
+    except Exception as exc:  # noqa: BLE001 - transcription must never return a fake score
+        raise RuntimeError(
+            "音程解析に失敗しました。Basic Pitchが未インストールか、音源を解析できませんでした。"
+        ) from exc
 
     from .musicxml import midi_to_musicxml
 
-    _quantize_midi(midi_path, result.bpm, quantize)
+    _quantize_midi(midi_path, result.bpm, quantize, mode)
     midi_to_musicxml(midi_path, xml_path)
     result.midi_path, result.xml_path = midi_path, xml_path
-    muse = _find_musescore()
+    # MuseScore can crash on very dense long scores on macOS.  Keep the core
+    # transcription stable and require explicit opt-in for automatic PDF export.
+    muse = _find_musescore() if os.getenv("OTOFUDE_ENABLE_MUSESCORE_PDF") == "1" else None
     if muse:
         pdf_path = output_dir / "score.pdf"
         try:
             # Converter mode avoids opening the editor window during local runs.
             subprocess.run(
-                [muse, "-s", "-m", "-w", "-R", str(xml_path), "-o", str(pdf_path)],
+                [muse, "-o", str(pdf_path), str(xml_path)],
                 check=True,
                 timeout=20,
                 capture_output=True,
@@ -87,14 +96,14 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
                 result.pdf_path = pdf_path
             else:
                 raise RuntimeError("MuseScoreがPDFファイルを生成しませんでした")
-        except Exception as exc:  # noqa: BLE001 - MuseScore is an optional external tool
-            result.warning = f"PDF変換に失敗しました。MusicXMLは保存できます。({exc})"
+        except Exception:  # noqa: BLE001 - MuseScore is an optional external tool
+            result.warning = "PDF変換に失敗しました。MusicXMLは保存できます。MuseScore Studioを直接開いて書き出すこともできます。"
     else:
-        result.warning = "PDF出力にはMuseScore Studioのインストールが必要です。"
+        result.warning = "PDFはMusicXML生成後にMuseScore Studioで書き出せます。自動PDF変換は安全のため無効にしています。"
     return result
 
 
-def _quantize_midi(path: Path, bpm: float, quantize: str) -> None:
+def _quantize_midi(path: Path, bpm: float, quantize: str, mode: str = "auto") -> None:
     grids = {"quarter": 1.0, "eighth": 0.5, "sixteenth": 0.25, "triplet": 1 / 3, "auto": 0.25}
     try:
         import pretty_midi
@@ -102,9 +111,36 @@ def _quantize_midi(path: Path, bpm: float, quantize: str) -> None:
         midi = pretty_midi.PrettyMIDI(str(path))
         grid_seconds = (60.0 / max(bpm, 1.0)) * grids.get(quantize, grids["auto"])
         for instrument in midi.instruments:
+            note_range = {"bass": (28, 67), "vocal": (48, 96), "melody": (48, 100)}.get(mode)
             for note in instrument.notes:
+                if note_range and not note_range[0] <= note.pitch <= note_range[1]:
+                    note.velocity = 0
+                    continue
                 note.start = round(note.start / grid_seconds) * grid_seconds
                 note.end = max(note.start + 0.04, round(note.end / grid_seconds) * grid_seconds)
+            # Basic Pitch may emit dense overlapping candidates.  The MVP is a
+            # readable melody score, so make each part monophonic before music21
+            # performs measure notation. This also avoids malformed tie/tuplet
+            # structures in long recordings.
+            # Keep one representative note per quantized onset.  This is the
+            # melody-first MVP policy and prevents thousands of near-duplicate
+            # notes from producing unreadable measures.
+            by_onset = {}
+            for note in instrument.notes:
+                if note.velocity <= 0 or note.end - note.start < max(0.08, grid_seconds * 0.25):
+                    continue
+                onset = round(note.start / grid_seconds) * grid_seconds
+                current = by_onset.get(onset)
+                if current is None or (note.velocity, note.pitch) > (current.velocity, current.pitch):
+                    by_onset[onset] = note
+            ordered = sorted(by_onset.values(), key=lambda n: (n.start, n.pitch, -n.velocity))
+            cleaned = []
+            for note in ordered:
+                if cleaned and note.start < cleaned[-1].end:
+                    cleaned[-1].end = note.start
+                if note.end > note.start:
+                    cleaned.append(note)
+            instrument.notes = cleaned
         midi.write(str(path))
     except Exception:  # noqa: BLE001 - quantization must not block valid MIDI output
         return

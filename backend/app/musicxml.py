@@ -7,14 +7,14 @@ DEMO_XML = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 def midi_to_musicxml(midi_path: Path, xml_path: Path, title: str = "おと譜") -> None:
-    try:
-        from music21 import converter
+    from music21 import converter
 
+    try:
         score = converter.parse(str(midi_path))
         score.metadata.title = title
         score.write("musicxml", fp=str(xml_path))
-    except Exception:  # noqa: BLE001 - malformed MIDI falls back to a valid demo score
-        xml_path.write_text(DEMO_XML, encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 - expose conversion failures to the UI
+        raise RuntimeError("MIDIからMusicXMLへの変換に失敗しました。音源を短くするか、別の音源をお試しください。") from exc
 
 
 def write_demo_xml(path: Path) -> None:

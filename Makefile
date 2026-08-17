@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV := .venv
 BIN := $(VENV)/bin
 
-.PHONY: install test lint frontend-build dev-backend dev-frontend
+.PHONY: install test lint frontend-build dev-backend dev-frontend start stop open-chrome
 
 install:
 	$(PYTHON) -m venv $(VENV)
@@ -24,3 +24,12 @@ dev-backend:
 
 dev-frontend:
 	npm run dev --prefix frontend -- --host 127.0.0.1
+
+start:
+	./scripts/start-local.sh
+
+stop:
+	./scripts/stop-local.sh
+
+open-chrome:
+	open -a 'Google Chrome' http://127.0.0.1:5173/

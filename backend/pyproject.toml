@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-transcription = ["basic-pitch>=0.4,<1"]
+transcription = ["basic-pitch>=0.4,<1", "faster-whisper>=1.1,<2"]
 dev = ["pytest>=8,<9", "ruff>=0.6,<1", "httpx>=0.27,<1"]
 
 [tool.setuptools]
