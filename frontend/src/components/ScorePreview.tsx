@@ -1,3 +1,29 @@
 import {useEffect,useRef,useState} from 'react';
-const DEMO_XML=`<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1"><work><work-title>おと譜 デモ</work-title></work><part-list><score-part id="P1"><part-name>メロディ</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes><direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>120</per-minute></metronome></direction-type></direction><note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note><note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note><note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note><note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note></measure></part></score-partwise>`;
-export default function ScorePreview({xmlUrl}:{xmlUrl:string}){const ref=useRef<HTMLDivElement>(null);const[error,setError]=useState(false);useEffect(()=>{let live=true;const render=async()=>{try{const{OpenSheetMusicDisplay}=await import('opensheetmusicdisplay');const res=await fetch(xmlUrl);if(!res.ok)throw new Error(`MusicXML取得失敗: ${res.status}`);const xml=await res.text();if(!live||!ref.current)return;ref.current.innerHTML='';const osmd=new OpenSheetMusicDisplay(ref.current,{autoResize:true,drawTitle:true});await osmd.load(xml);osmd.render()}catch{if(live)setError(true)}};setError(false);render();return()=>{live=false}},[xmlUrl]);return <div className="score-paper">{error?<p className="score-fallback">生成したMusicXMLを読み込めませんでした。MIDI／MusicXML保存を確認してください。</p>:<div ref={ref} className="osmd"/>}</div>}
+
+export default function ScorePreview({xmlUrl}:{xmlUrl:string}){
+  const ref=useRef<HTMLDivElement>(null);
+  const[error,setError]=useState<string|null>(null);
+  useEffect(()=>{
+    let live=true;
+    const render=async()=>{
+      try{
+        if(xmlUrl.includes('/api/demo-score')){
+          setError('音声ファイルを解析すると、生成した楽譜がここに表示されます。');
+          return;
+        }
+        const{OpenSheetMusicDisplay}=await import('opensheetmusicdisplay');
+        const res=await fetch(xmlUrl);
+        if(!res.ok)throw new Error(`MusicXML取得失敗: ${res.status}`);
+        const xml=await res.text();
+        if(!live||!ref.current)return;
+        ref.current.innerHTML='';
+        const osmd=new OpenSheetMusicDisplay(ref.current,{autoResize:true,drawTitle:true});
+        await osmd.load(xml);
+        osmd.render();
+      }catch{if(live)setError('生成したMusicXMLを読み込めませんでした。もう一度解析してください。');}
+    };
+    setError(null); render();
+    return()=>{live=false};
+  },[xmlUrl]);
+  return <div className="score-paper">{error?<p className="score-fallback">{error}</p>:<div ref={ref} className="osmd"/>}</div>;
+}
