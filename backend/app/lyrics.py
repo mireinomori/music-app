@@ -45,6 +45,14 @@ def transcribe_and_attach(audio_path: Path, musicxml_path: Path) -> dict[str, ob
     return {"text": "".join(words), "language": info.language, "word_count": len(words)}
 
 
+def attach_text(musicxml_path: Path, text: str) -> dict[str, object]:
+    units = [char for char in text if not char.isspace()]
+    if not units:
+        raise ValueError("歌詞を入力してください。")
+    _attach_lyrics(musicxml_path, units)
+    return {"text": "".join(units), "word_count": len(units)}
+
+
 def _is_lyric_char(char: str) -> bool:
     category = unicodedata.category(char)
     return category[0] in {"L", "N"} or char in "ーっゃゅょぁぃぅぇぉ"

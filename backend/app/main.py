@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .analyzer import _find_musescore, analyze_audio
-from .lyrics import transcribe_and_attach
+from .lyrics import attach_text, transcribe_and_attach
 from .musicxml import write_demo_xml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,3 +102,14 @@ def recognize_lyrics(job_id: str):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 - show a beginner-friendly local error
         raise HTTPException(status_code=500, detail=f"歌詞の認識に失敗しました。{exc}") from exc
+
+
+@app.post("/api/jobs/{job_id}/lyrics-text")
+def add_lyrics_text(job_id: str, lyrics: str = Form(...)):
+    musicxml = DATA / job_id / "score.musicxml"
+    if not musicxml.exists():
+        raise HTTPException(status_code=404, detail="先に楽譜を作成してください。")
+    try:
+        return attach_text(musicxml, lyrics)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
