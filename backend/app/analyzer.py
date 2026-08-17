@@ -28,7 +28,7 @@ def validate_audio(path: Path, max_bytes: int = 250 * 1024 * 1024) -> None:
         raise ValueError("音声ファイルが大きすぎます。MVPでは250MB以下にしてください。")
 
 
-def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> AnalysisResult:
+def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto", mode: str = "auto") -> AnalysisResult:
     validate_audio(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     result = AnalysisResult()
@@ -75,7 +75,7 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
 
     from .musicxml import midi_to_musicxml
 
-    _quantize_midi(midi_path, result.bpm, quantize)
+    _quantize_midi(midi_path, result.bpm, quantize, mode)
     midi_to_musicxml(midi_path, xml_path)
     result.midi_path, result.xml_path = midi_path, xml_path
     # MuseScore can crash on very dense long scores on macOS.  Keep the core
@@ -103,7 +103,7 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
     return result
 
 
-def _quantize_midi(path: Path, bpm: float, quantize: str) -> None:
+def _quantize_midi(path: Path, bpm: float, quantize: str, mode: str = "auto") -> None:
     grids = {"quarter": 1.0, "eighth": 0.5, "sixteenth": 0.25, "triplet": 1 / 3, "auto": 0.25}
     try:
         import pretty_midi
@@ -111,7 +111,11 @@ def _quantize_midi(path: Path, bpm: float, quantize: str) -> None:
         midi = pretty_midi.PrettyMIDI(str(path))
         grid_seconds = (60.0 / max(bpm, 1.0)) * grids.get(quantize, grids["auto"])
         for instrument in midi.instruments:
+            note_range = {"bass": (28, 67), "vocal": (48, 96), "melody": (48, 100)}.get(mode)
             for note in instrument.notes:
+                if note_range and not note_range[0] <= note.pitch <= note_range[1]:
+                    note.velocity = 0
+                    continue
                 note.start = round(note.start / grid_seconds) * grid_seconds
                 note.end = max(note.start + 0.04, round(note.end / grid_seconds) * grid_seconds)
             # Basic Pitch may emit dense overlapping candidates.  The MVP is a
@@ -123,6 +127,8 @@ def _quantize_midi(path: Path, bpm: float, quantize: str) -> None:
             # notes from producing unreadable measures.
             by_onset = {}
             for note in instrument.notes:
+                if note.velocity <= 0 or note.end - note.start < max(0.08, grid_seconds * 0.25):
+                    continue
                 onset = round(note.start / grid_seconds) * grid_seconds
                 current = by_onset.get(onset)
                 if current is None or (note.velocity, note.pitch) > (current.velocity, current.pitch):

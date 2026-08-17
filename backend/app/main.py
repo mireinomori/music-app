@@ -56,7 +56,7 @@ async def analyze(file: UploadFile = File(...), mode: str = Form("auto"), quanti
     try:
         with input_path.open("wb") as target:
             shutil.copyfileobj(file.file, target)
-        result = analyze_audio(input_path, job_dir, quantize)
+        result = analyze_audio(input_path, job_dir, quantize, mode)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
