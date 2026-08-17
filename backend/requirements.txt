@@ -1,2 +1,3 @@
 -e .
 basic-pitch>=0.4,<1
+faster-whisper>=1.1,<2
