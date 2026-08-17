@@ -112,6 +112,27 @@ def _quantize_midi(path: Path, bpm: float, quantize: str) -> None:
             for note in instrument.notes:
                 note.start = round(note.start / grid_seconds) * grid_seconds
                 note.end = max(note.start + 0.04, round(note.end / grid_seconds) * grid_seconds)
+            # Basic Pitch may emit dense overlapping candidates.  The MVP is a
+            # readable melody score, so make each part monophonic before music21
+            # performs measure notation. This also avoids malformed tie/tuplet
+            # structures in long recordings.
+            # Keep one representative note per quantized onset.  This is the
+            # melody-first MVP policy and prevents thousands of near-duplicate
+            # notes from producing unreadable measures.
+            by_onset = {}
+            for note in instrument.notes:
+                onset = round(note.start / grid_seconds) * grid_seconds
+                current = by_onset.get(onset)
+                if current is None or (note.velocity, note.pitch) > (current.velocity, current.pitch):
+                    by_onset[onset] = note
+            ordered = sorted(by_onset.values(), key=lambda n: (n.start, n.pitch, -n.velocity))
+            cleaned = []
+            for note in ordered:
+                if cleaned and note.start < cleaned[-1].end:
+                    cleaned[-1].end = note.start
+                if note.end > note.start:
+                    cleaned.append(note)
+            instrument.notes = cleaned
         midi.write(str(path))
     except Exception:  # noqa: BLE001 - quantization must not block valid MIDI output
         return
