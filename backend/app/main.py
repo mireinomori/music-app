@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .analyzer import _find_musescore, analyze_audio
+from .lyrics import transcribe_and_attach
 from .musicxml import write_demo_xml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,3 +87,18 @@ def download(job_id: str, kind: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="この形式のファイルはまだ作成されていません。MuseScoreの導入が必要な場合があります。")
     return FileResponse(path, filename=path.name)
+
+
+@app.post("/api/jobs/{job_id}/lyrics")
+def recognize_lyrics(job_id: str):
+    job_dir = DATA / job_id
+    audio = next((path for path in job_dir.glob("input.*") if path.is_file()), None)
+    musicxml = job_dir / "score.musicxml"
+    if audio is None or not musicxml.exists():
+        raise HTTPException(status_code=404, detail="先に音声解析を完了してください。")
+    try:
+        return transcribe_and_attach(audio, musicxml)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - show a beginner-friendly local error
+        raise HTTPException(status_code=500, detail=f"歌詞の認識に失敗しました。{exc}") from exc
