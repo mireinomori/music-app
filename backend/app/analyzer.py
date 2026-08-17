@@ -62,9 +62,10 @@ def analyze_audio(path: Path, output_dir: Path, quantize: str = "auto") -> Analy
             candidates[0].replace(midi_path)
         else:
             raise RuntimeError("MIDIが生成されませんでした")
-    except Exception:  # noqa: BLE001 - Basic Pitch is an optional runtime
-        result.warning = "Basic Pitchが利用できないため、デモ用のMIDI/楽譜を表示しています。" if not result.warning else result.warning
-        _write_demo_midi(midi_path)
+    except Exception as exc:  # noqa: BLE001 - transcription must never return a fake score
+        raise RuntimeError(
+            "音程解析に失敗しました。Basic Pitchが未インストールか、音源を解析できませんでした。"
+        ) from exc
 
     from .musicxml import midi_to_musicxml
 
