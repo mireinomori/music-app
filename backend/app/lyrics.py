@@ -20,7 +20,15 @@ def transcribe_and_attach(audio_path: Path, musicxml_path: Path) -> dict[str, ob
     compute_type = os.getenv("OTOFUDE_WHISPER_COMPUTE", "int8")
     model = WhisperModel(model_name, device=device, compute_type=compute_type)
     segments, info = model.transcribe(
-        str(audio_path), language="ja", beam_size=5, word_timestamps=True, vad_filter=True
+        str(audio_path),
+        language="ja",
+        beam_size=5,
+        word_timestamps=True,
+        # Singing over accompaniment is often classified as non-speech by VAD.
+        # Keep every transcription window and let the lyric character filter
+        # remove punctuation/noise afterwards.
+        vad_filter=False,
+        condition_on_previous_text=True,
     )
     segments_text: list[str] = []
     for segment in segments:
